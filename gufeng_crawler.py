@@ -3,18 +3,16 @@
 """
 Created on Tue Mar 12 21:44:06 2019
 
-@author: lufei
+@author: childrenbody
 """
 import os
 import urllib
 import re
-from bs4 import BeautifulSoup
 from functools import wraps
 import logging
 logging.basicConfig(filename='error.log', format="%(asctime)s - %(message)s", level=logging.INFO)
 
 def log(func):
-    @wraps(func)
     def wrapper(*args, **kwargs):
         print(func.__name__)
         return func(*args, **kwargs)
@@ -61,14 +59,13 @@ class Preprocess:
     def __init__(self, comic_name):
         self.url_gen = UrlGenerate(comic_name)
         self.comic_name = comic_name
-        
-    @bytes_to_strings    
+    
+    @bytes_to_strings
     def get_chapters_list(self, page: bytes or str) -> dict:
-        soup = BeautifulSoup(page, 'lxml')
-        chapters = soup.find(attrs={'id': 'chapter-list-1'})
-        chapters = list(set(chapters.contents))
-        chapters.remove('\n')
-        chapters_dict = {tag.span.text: tag.a.get('href') for tag in chapters}
+        ul = re.search('<ul id="chapter-list-1" data-sort="asc">(.*?)</ul>', page, re.S).group(1)
+        url_list = re.findall('<a href="(.*?)"', ul)
+        title_list = re.findall('<span>(.*?)</span>', ul)
+        chapters_dict = dict(zip(title_list, url_list))
         return chapters_dict
     
     @bytes_to_strings
@@ -78,7 +75,7 @@ class Preprocess:
             
         chapter_image = re.search('var chapterImages = \[(.*?)\];', page)
         if chapter_image is None:
-            raise Exception("匹配图片链接失败")
+            raise Exception("matching image link failed.")
         
         images = chapter_image.group(1).split(',')
         images = list(map(lambda x: remove_double_quotes(x), images))
@@ -88,7 +85,7 @@ class Preprocess:
     def get_image_path(self, page: bytes or str) -> str:
         path = re.search('var chapterPath = "(.*?)";', page)
         if path is None:
-            raise Exception("匹配图片路径失败")
+            raise Exception("matching image path failed.")
         return path.group(1)
     
     @staticmethod
@@ -159,6 +156,7 @@ class Spider:
         return success, failure
             
     def run(self):
+        '''Sequential execution'''
         chapters_dict = self.make_chapter_url_list()
         success = 0
         failure = 0
@@ -167,11 +165,10 @@ class Spider:
             s, f = self.download_image_by_chapter(chapter, images_url)
             success += s
             failure += f
-        logging.info('{} 已完成. {}成功, {}失败'.format(self.comic_name, success, failure))
+        logging.info('{} has completed! {} successes, {} failures'.format(self.comic_name, success, failure))
     
 if __name__ == '__main__':
-    # sp = Spider('wuliandianfeng')
-    # sp.run()
+    sp = Spider('wuliandianfeng')
+    sp.run()
 
     
-
