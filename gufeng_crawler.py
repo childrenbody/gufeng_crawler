@@ -9,6 +9,7 @@ import os
 import urllib
 import re
 from functools import wraps
+from concurrent.futures import ThreadPoolExecutor
 import logging
 logging.basicConfig(filename='error.log', format="%(asctime)s - %(message)s", level=logging.INFO)
 
@@ -107,11 +108,12 @@ class Preprocess:
         with open(save_path, 'wb') as f:
             f.write(jpg)
         
-class Spider:
+class Crawler:
     def __init__(self, comic_name):
         self.comic_name = comic_name
         self.pre = Preprocess(comic_name)
         self.url_gen = self.pre.url_gen
+        self.MAX_WORKER = 10
         
     def get_source_code_from_url(self, url) -> bytes:
         page = urllib.request.urlopen(url)
@@ -136,6 +138,7 @@ class Spider:
         try:
             image = self.get_source_code_from_url(url)
             self.pre.save_jpg(image, save_path)
+            print(save_path)
             return True
         except urllib.request.HTTPError:
             return False
@@ -154,7 +157,25 @@ class Spider:
                 failure += 1
             success += 1
         return success, failure
-            
+    
+    def single_threading(self, chapter_images):
+        self.pre.make_save_folder(self.comic_name, chapter_images['title'])
+        for i, url in chapter_images['images'].items():
+            save_path = self.pre.image_exist(chapter_images['title'], i)
+            print(chapter_images['title'])
+            if not save_path:
+                continue
+            if not self._download_image_and_save(url, save_path):
+                logging.error('{}: page {} not found'.format(chapter_images['title'], i))
+    
+    def multithreading(self):
+        chapters_dict = self.make_chapter_url_list()
+        chapters_list = [dict(title = chapter, images = images)
+                            for chapter, images in chapters_dict.items()]
+        
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKER) as pool:
+            list(pool.map(self.single_threading, chapters_list))
+    
     def run(self):
         '''Sequential execution'''
         chapters_dict = self.make_chapter_url_list()
@@ -168,7 +189,6 @@ class Spider:
         logging.info('{} has completed! {} successes, {} failures'.format(self.comic_name, success, failure))
     
 if __name__ == '__main__':
-    sp = Spider('wuliandianfeng')
-    sp.run()
-
+    sp = Crawler('wuliandianfeng')
+    sp.multithreading()
     
