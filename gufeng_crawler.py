@@ -165,9 +165,9 @@ class Crawler:
         self.pre.make_save_folder(self.comic_name, chapter_images['title'])
         for i, url in chapter_images['images'].items():
             save_path = self.pre.image_exist(chapter_images['title'], i)
-            print(chapter_images['title'])
             if not save_path:
                 continue
+            print(chapter_images['title'])
             if not self._download_image_and_save(url, save_path):
                 self.logger.error('{}: page {} not found'.format(chapter_images['title'], i))
     
@@ -198,4 +198,3 @@ class Crawler:
 if __name__ == '__main__':
     sp = Crawler('wuliandianfeng')
     sp.multithreading()
-    
