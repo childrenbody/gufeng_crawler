@@ -11,13 +11,14 @@ import re
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 import logging
-logging.basicConfig(filename='error.log', format="%(asctime)s - %(message)s", level=logging.INFO)
 
-def log(func):
-    def wrapper(*args, **kwargs):
-        print(func.__name__)
-        return func(*args, **kwargs)
-    return wrapper
+def get_logger():
+    logger = logging.getLogger()
+    logger.setLevel(logging.WARNING)
+    fh = logging.FileHandler(filename='error.log')
+    fh.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+    logger.addHandler(fh)
+    return logger
 
 def bytes_to_strings(func):
     @wraps(func)
@@ -114,6 +115,7 @@ class Crawler:
         self.pre = Preprocess(comic_name)
         self.url_gen = self.pre.url_gen
         self.MAX_WORKER = 10
+        self.logger = get_logger()
         
     def get_source_code_from_url(self, url) -> bytes:
         page = urllib.request.urlopen(url)
@@ -132,6 +134,7 @@ class Crawler:
         chapters_list = self.pre.get_chapters_list(chapters_page)
         chapters_dict = {chapter: self.get_image_url_list(url)
                             for chapter, url in chapters_list.items()}
+        self.file_sum = sum([len(v) for k, v in chapters_dict.items()])
         return chapters_dict
     
     def _download_image_and_save(self, url, save_path):
@@ -153,7 +156,7 @@ class Crawler:
             if not save_path:
                 continue
             if not self._download_image_and_save(url, save_path):
-                logging.error('{}: page {} not found'.format(chapter, i))
+                self.logger.error('{}: page {} not found'.format(chapter, i))
                 failure += 1
             success += 1
         return success, failure
@@ -166,7 +169,7 @@ class Crawler:
             if not save_path:
                 continue
             if not self._download_image_and_save(url, save_path):
-                logging.error('{}: page {} not found'.format(chapter_images['title'], i))
+                self.logger.error('{}: page {} not found'.format(chapter_images['title'], i))
     
     def multithreading(self):
         chapters_dict = self.make_chapter_url_list()
@@ -186,7 +189,11 @@ class Crawler:
             s, f = self.download_image_by_chapter(chapter, images_url)
             success += s
             failure += f
-        logging.info('{} has completed! {} successes, {} failures'.format(self.comic_name, success, failure))
+        self.logger.info('{} has completed! {} successes, {} failures'.format(self.comic_name, success, failure))
+    
+    def jpg_count(self):
+        self.jpg_sum = sum([len(os.listdir(os.path.join('wuliandianfeng', chapter)))
+                                for chapter in os.listdir('wuliandianfeng')])
     
 if __name__ == '__main__':
     sp = Crawler('wuliandianfeng')
